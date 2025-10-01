@@ -58,6 +58,41 @@ pipeline {
             echo "❌ Job failed. Log file not cleared."
         }
     }
-}
+}  
 
+# Step 4: Cron Script to Trigger Jenkins  
+#!/bin/bash
 
+LOG_FILE="/var/log/nginx/access.log"
+MAX_SIZE=$((1024*1024*1024))   # 1GB
+JENKINS_URL="http://localhost:8080/job/UploadLogs/build"
+JENKINS_USER="admin"
+JENKINS_TOKEN="your_jenkins_api_token"  # Replace with your Jenkins token
+
+FILE_SIZE=$(stat -c%s "$LOG_FILE")
+
+if [ "$FILE_SIZE" -ge "$MAX_SIZE" ]; then
+    echo "$(date): Log file exceeded 1GB. Triggering Jenkins job..."
+    curl -u $JENKINS_USER:$JENKINS_TOKEN -X POST $JENKINS_URL
+else
+    echo "$(date): Log file size under 1GB. No action needed."
+fi  
+
+# Make it executable:  
+chmod +x /home/ubuntu/log_monitor.sh  
+
+# Step 5: Schedule Cron Job  
+crontab -e  
+Add the following line:  
+*/5 * * * * /bin/bash /home/ubuntu/log_monitor.sh >> /home/ubuntu/log_monitor.log 2>&1  
+
+# Step 6: Testing  
+Generate test logs:  
+sudo dd if=/dev/zero bs=1M count=10 | sudo tee -a /var/log/nginx/access.log  
+Run Jenkins pipeline manually → check console output:  
+Uploading /var/log/nginx/access.log to S3...  
+Clearing log file...  
+✅ Log file successfully uploaded and cleared.  
+
+Verify in S3:  
+aws s3 ls s3://my-log-storage-bucket-321/  
